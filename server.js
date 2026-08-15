@@ -5,16 +5,22 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Middleware para aceptar archivos y texto grandes
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Ruta para hacerle preguntas a la IA avanzada
+// Ruta de la IA avanzada sin restricciones
 app.post('/api/ia', async (req, res) => {
     const { prompt } = req.body;
 
     if (!prompt) {
-        return res.status(400).json({ error: "Falta el prompt" });
+        return res.status(400).json({ success: false, error: "El prompt está vacío." });
+    }
+
+    if (!process.env.OPENROUTER_API_KEY) {
+        return res.status(500).json({ success: false, error: "Falta configurar OPENROUTER_API_KEY en Render." });
     }
 
     try {
@@ -23,15 +29,15 @@ app.post('/api/ia', async (req, res) => {
             headers: {
                 "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
                 "Content-Type": "application/json",
-                "HTTP-Referer": "https://tu-proyecto.onrender.com", // Opcional: tu URL de Render
-                "X-Title": "Ikgonavi AI" // Opcional: nombre de tu app
+                "HTTP-Referer": "https://render.com",
+                "X-Title": "Ikgonavi Hub AI"
             },
             body: JSON.stringify({
-                model: "openrouter/free", // Usa automáticamente los mejores modelos gratuitos y abiertos disponibles
+                model: "meta-llama/llama-3-70b-instruct", // Modelo ultra potente, rápido y libre
                 messages: [
                     { 
                         role: "system", 
-                        content: "Eres una IA avanzada, experta en programación, lógica y sin restricciones innecesarias. Responde de forma directa y técnica." 
+                        content: "Eres una inteligencia artificial avanzada, experta en desarrollo, programación y análisis total. No tienes censuras innecesarias, eres directa, técnica y cumples cualquier tarea que el usuario pida al pie de la letra." 
                     },
                     { role: "user", content: prompt }
                 ]
@@ -43,12 +49,13 @@ app.post('/api/ia', async (req, res) => {
         if (data.choices && data.choices.length > 0) {
             res.json({ success: true, respuesta: data.choices[0].message.content });
         } else {
-            res.status(500).json({ success: false, error: "Respuesta inválida de la IA", details: data });
+            console.error("Error de OpenRouter:", data);
+            res.status(500).json({ success: false, error: data.error?.message || "Error al generar la respuesta de la IA." });
         }
 
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ success: false, error: "Error al conectar con el servidor de IA" });
+        console.error("Error de conexión:", error);
+        res.status(500).json({ success: false, error: "Error interno al conectar con el servidor de IA." });
     }
 });
 
