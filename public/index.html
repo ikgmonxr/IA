@@ -5,35 +5,67 @@
     <title>Ikgonavi Hub</title>
     <style>
         body { background-color: #0b0f19; color: #f1f5f9; font-family: sans-serif; height: 100vh; display: flex; flex-direction: column; padding: 20px; box-sizing: border-box; }
-        #chat { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; max-width: 800px; margin: 0 auto; width: 100%; }
-        .msg { padding: 10px 15px; border-radius: 8px; max-width: 80%; }
+        #chat { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; max-width: 800px; margin: 0 auto; width: 100%; padding: 10px; }
+        .msg { padding: 10px 15px; border-radius: 8px; max-width: 80%; white-space: pre-wrap; }
         .user { background: #1d4ed8; align-self: flex-end; }
         .ai { background: #1e293b; align-self: flex-start; border: 1px solid #334155; }
-        #controls { max-width: 800px; width: 100%; margin: 10px auto; display: flex; gap: 10px; }
-        textarea { flex: 1; padding: 10px; background: #1e293b; color: white; border-radius: 8px; border: 1px solid #334155; resize: none; }
-        button { padding: 10px 20px; background: #0284c7; color: white; border: none; border-radius: 8px; cursor: pointer; }
+        #controls { max-width: 800px; width: 100%; margin: 10px auto; display: flex; gap: 10px; align-items: center; }
+        textarea { flex: 1; padding: 10px; background: #1e293b; color: white; border-radius: 8px; border: 1px solid #334155; resize: none; height: 24px; }
+        button, label.file-btn { padding: 10px 15px; background: #0284c7; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; text-align: center; }
+        label.file-btn:hover, button:hover { background: #0369a1; }
+        #file-status { max-width: 800px; margin: 0 auto; font-size: 12px; color: #38bdf8; width: 100%; }
     </style>
 </head>
 <body>
-    <div id="chat"><div class="msg ai">¡Sistema listo! Pregunta lo que sea.</div></div>
+    <div id="chat"><div class="msg ai">¡Sistema listo con soporte para archivos grandes! Sube tus archivos y pregunta lo que sea.</div></div>
+    <div id="file-status"></div>
     <div id="controls">
+        <input type="file" id="fileInput" multiple style="display:none" onchange="procesarArchivos(event)">
+        <label for="fileInput" class="file-btn">📁 Archivos</label>
         <textarea id="input" placeholder="Escribe tu mensaje..."></textarea>
         <button onclick="enviar()">Enviar</button>
     </div>
     <script>
+        let archivosContenido = "";
+
+        function procesarArchivos(event) {
+            const files = event.target.files;
+            if (!files.length) return;
+            
+            archivosContenido = "\n\n--- Archivos adjuntos ---\n";
+            let procesados = 0;
+
+            for (let i = 0; i < files.length; i++) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    archivosContenido += `\n[Archivo: ${files[i].name}]\n${e.target.result}\n`;
+                    procesados++;
+                    if (procesados === files.length) {
+                        document.getElementById('file-status').innerText = `${files.length} archivo(s) cargado(s) correctamente.`;
+                    }
+                };
+                reader.readAsText(files[i]);
+            }
+        }
+
         async function enviar() {
             const input = document.getElementById('input');
             const chat = document.getElementById('chat');
-            const texto = input.value;
-            if(!texto) return;
+            let texto = input.value;
             
-            chat.innerHTML += `<div class="msg user">${texto}</div>`;
+            if(!texto && !archivosContenido) return;
+            
+            const mensajeFinal = texto + archivosContenido;
+            chat.innerHTML += `<div class="msg user">${texto} ${archivosContenido ? '(Con archivos adjuntos)' : ''}</div>`;
+            
             input.value = '';
+            archivosContenido = "";
+            document.getElementById('file-status').innerText = "";
             
             const res = await fetch('/api/ia', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ prompt: texto })
+                body: JSON.stringify({ prompt: mensajeFinal })
             });
             const data = await res.json();
             chat.innerHTML += `<div class="msg ai">${data.respuesta || data.error}</div>`;
